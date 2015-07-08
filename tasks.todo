@@ -1,0 +1,21 @@
+MAF file processing:
+  ☐ replace '.' with '-' still necessary?
+
+Amino acid change identification:
+
+Grab bag:
+  ☐ auto-ID transcript length dictionary, see newer maf processing script
+
+Config File:
+  ☐ Additional columns -- a list of names?
+  ☐ Path to gene whitelist -- when provided, ignore information for all genes NOT listed in this file
+  ☐ Path to sample whitelist -- when provided, ignore information for all genes NOT listed in this file
+  ☐ Mutation types -- list of mutation types to be included in output (e.g. missense)
+  ☐ Mutation classes -- list of mutation classes to be included in output (e.g. somatic)
+  ☐ Transcript database -- path to JSON file of transcripts and their lengths
+
+Other:
+  ☐ generating summuary stats
+  ☐ visualizations
+    ☐  defualt?
+    # muts of each type/gene, # of muts per sample
