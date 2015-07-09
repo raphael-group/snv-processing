@@ -13,6 +13,7 @@ Config File:
   ☐ Mutation types -- list of mutation types to be included in output (e.g. missense)
   ☐ Mutation classes -- list of mutation classes to be included in output (e.g. somatic)
   ☐ Transcript database -- path to JSON file of transcripts and their lengths
+ ☐ usage of the DEFAULT section? 
 
 Other:
   ☐ generating summuary stats
