@@ -1,9 +1,9 @@
 #!/usr/bin/python
 
 import re, sys, math, os, json, argparse, ConfigParser
-from collections import defaultdict, Counter
+from collections import defaultdict
 
-def process_maf_file(MAF, transcipt_dict, sample_whitelist, gene_whitelist, config):
+def process_maf_file(maf_path, transcipt_dict, sample_whitelist, gene_whitelist, config):
     # 1. Identify file indices
     #
     indice_list = None
@@ -13,8 +13,10 @@ def process_maf_file(MAF, transcipt_dict, sample_whitelist, gene_whitelist, conf
 
     exclude_classes, exclude_mutations = get_mutation_exclusions(config)
 
-    with open(MAF) as maf_file:
+    with open(maf_path) as maf_file:
         for line in maf_file:
+
+            # Ignore comments
             if line.startswith('#'):
                 continue
 
@@ -45,11 +47,10 @@ def process_maf_file(MAF, transcipt_dict, sample_whitelist, gene_whitelist, conf
 
             if (variant_class_type not in exclude_classes 
              and mutation_type not in exclude_mutations):
+
                 original_amino_acid, new_amino_acid, amino_acid_location = get_amino_acid_change(
                                                 aa_change, mutation_type, variant_class_type, codon)
                 
-
-
 
 
     return 0
@@ -59,7 +60,7 @@ def get_mutation_exclusions(config):
     Return the two exclusion sets, mutation types and mutation classes.
     If none are provided in the config, defaults are used.
     '''
-
+    # TODO: actually use config defaults
     if not config.get('maf', 'mutation_types'):
         exclude_mutations = set(["Silent", "Intron", "3'UTR", "5'UTR", "IGR", "Intron", "lincRNA"])
     else:
@@ -98,7 +99,7 @@ def define_indices(header_line):
     indice_list = []
     for header_options in header_name_list:
         existing_headers = set(header_options) & set(indice_dict.keys())
-        if len(existing_headers) == 0 :
+        if len(existing_headers) == 0:
             raise IndexError("Names %s not found" % str(header_options))
         else:
             indice_list.append(indice_dict[existing_headers.pop()])
@@ -109,18 +110,25 @@ def get_amino_acid_change(aa_change, mutation_type, variant_class_type, codon):
     '''
     Attempt to parse amino acid change and change location.
     '''
+    aa_new, aa_old, aa_location = None, None, None
 
-    return 1, 2, 3
+    if aa_change and aa_change not in ("N/A", ".", "NULL"):
+        pass
+
+    return aa_new, aa_old, aa_location
 
 def get_parser():
     '''
     Parse arguments.
     '''
-    transcript_file='transcript-lengths.json'
 
     parser = argparse.ArgumentParser(description='Parse MAF files')
-    parser.add_argument('-ia', '--inactive_types', nargs="*", type=str, help="Inactivating mutation types.",
-        default=["frame_shift_ins", "nonstop_mutation", "nonsense_mutation", "splice_site", "frame_shift_del"])
+
+    parser.add_argument('-ia', '--inactive_types', nargs="*",
+                        type=str, help="Inactivating mutation types.",
+                        default=["frame_shift_ins", "nonstop_mutation", "nonsense_mutation",
+                                 "splice_site", "frame_shift_del"])
+
     parser.add_argument('-o', '--output_prefix', default=None, help='Output prefix.')
 
     return parser
@@ -156,3 +164,75 @@ def run(args, config):
 
 if __name__ == '__main__':
     run(get_parser().parse_args(sys.argv[1:]), get_config())
+
+
+## BELOW IS OLD CODE, included just to get this working. Need to survey
+## MAF files to get an idea of how to improve amino acid change info extraction
+################################################################################
+# Parse the different mutation formats to get the amino acid change
+def snp_mutation( aa_change ):
+    # parsing SNP, DNP and TNP
+    aao, aan, aaloc = "", "", ""
+    
+    # capture formats like p.A222Q, p.*222Q, p.222Q, p.A222*
+    if re.search(r'p.([a-zA-z*_]+)?(\d+)([a-zA-Z*_]+)', aa_change): 
+        aao = re.search(r'p.([a-zA-Z*_]+)?(\d+)([a-zA-Z*_]+)', aa_change).group(1)
+        aan = re.search(r'p.([a-zA-Z*]+)?(\d+)([a-zA-Z*_]+)', aa_change).group(3)
+        aaloc = re.search(r'p.([a-zA-Z*_]+)?(\d+)([a-zA-Z*_]+)', aa_change).group(2)  
+        if not aao:
+            aao = ""
+    else:
+        raise ValueError("Error format can't be parsed: " + aa_change + "\n")
+
+    return aao, aan, aaloc
+
+def splice_site_mutation(aa_change, codon):
+    aao, aan, aaloc = "", "", ""
+
+    # capture formats like p.A222_splice or e20-1 or p.321_splice
+    if re.search(r'^p\.[A-Z]\d+_splice', aa_change): #p.A222_splice
+        aao = aa_change[2]
+        aan = 'splice'
+        aaloc = re.search(r'^p\.[A-Z](\d+)_splice', aa_change).group(1)
+    elif re.search(r'^p\.\d+_splice', aa_change): # p.333_splice
+        aao = 'splice'
+        aan = 'splice'
+        aaloc = re.search(r'^p\.(\d+)_splice', aa_change).group(1)
+    
+    elif re.search(r'^e', aa_change) and re.search(r'c\.(\d+)(\+|\-)(\d+)', codon):
+        aao = 'splice'
+        aan = 'splice'
+        aaloc = int(math.ceil( float(re.search(r'^c\.(\d+)(\+|\-)(\d+)', codon).group(1)) / 3))
+    else:
+        raise ValueError("Error format can't be parsed: " + aa_change + "\n")
+
+    return aao, aan, aaloc
+
+def ins_del_mutation(aa_change, codon):
+    aao, aan, aaloc = "", "", ""
+
+    # capture formats like p.A222Q, p.*222Q, p.222Q, p.A222*, inframe_shift, or splice format
+    if re.search(r'p.([a-zA-Z*_]+)?(\d+)([a-zA-Z*_]+)', aa_change):
+        aao = re.search(r'p.([a-zA-Z*_]+)?(\d+)([a-zA-Z*_]+)', aa_change).group(1)
+        aan = re.search(r'p.([a-zA-Z*_]+)?(\d+)([a-zA-Z*_]+)', aa_change).group(3)
+        aaloc = re.search(r'p.([a-zA-Z*_]+)?(\d+)([a-zA-Z*_]+)', aa_change).group(2)
+        if not aao:
+            aao = ""
+    elif re.search(r'p.(\d+)_(\d+)(\w+)', aa_change):
+        aao = re.search(r'p.(\d+)_(\d+)(\w+)', aa_change).group(3)
+        aan = re.search(r'p.(\d+)_(\d+)(\w+)', aa_change).group(3)
+        aaloc = re.search(r'p.(\d+)_(\d+)(\w+)', aa_change).group(1)                                                
+        aaloc2 = re.search(r'p.(\d+)_(\d+)(\w+)', aa_change).group(2)
+        if aaloc == aaloc2:
+            aaloc2 = -1
+    elif re.search(r'p.-(\d+)fs', aa_change):
+        aaloc = re.search(r'p.-(\d+)fs', aa_change).group(1)
+        return None, aaloc, None
+    elif re.search(r'^e', aa_change) and re.search(r'^c\.(\d+)(\+|\-)(\d+)', codon): 
+        aao = 'splice'
+        aan = 'splice'
+        aaloc =  math.ceil(float(re.search(r'^c\.(\d+)(\+|\-)(\d+)', codon).group(1))/3)                
+    else:
+        raise ValueError("Error format can't be parsed: " + aa_change + "\n")
+    
+    return aao, aan, aaloc
