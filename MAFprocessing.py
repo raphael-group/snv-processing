@@ -11,7 +11,7 @@ def process_maf_file(maf_path, transcipt_dict, sample_whitelist, gene_whitelist,
     gene_to_sample = defaultdict(lambda: defaultdict())
     sample_to_gene = defaultdict(lambda: defaultdict())
 
-    exclude_classes, exclude_mutations = get_mutation_exclusions(config)
+    exclude_mutations, exclude_status, exclude_validation = get_mutation_exclusions(config)
 
     with open(maf_path) as maf_file:
         for line in maf_file:
@@ -27,8 +27,8 @@ def process_maf_file(maf_path, transcipt_dict, sample_whitelist, gene_whitelist,
                 indice_list = define_indices(line)
                 continue
 
-            [gene, sample, variant_class_type, mutation_type, valid_stat,
-                mut_stat, location, transcript_id, codon, aa_change] = [line[i] for i in indice_list]
+            [gene, sample, variant_class_type, variant_type, valid_status,
+                mutation_status, transcript_id, codon, aa_change] = [line[i] for i in indice_list]
 
             # If a whitelist is provided, skip any genes/samples not in the list
             if gene_whitelist and gene not in gene_whitelist:
@@ -45,11 +45,12 @@ def process_maf_file(maf_path, transcipt_dict, sample_whitelist, gene_whitelist,
 
 
 
-            if (variant_class_type not in exclude_classes 
-             and mutation_type not in exclude_mutations):
+            if (mutation_status not in exclude_status 
+             and variant_class_type not in exclude_mutations
+             and valid_status not in exclude_validation):
 
                 original_amino_acid, new_amino_acid, amino_acid_location = get_amino_acid_change(
-                                                aa_change, mutation_type, variant_class_type, codon)
+                                                aa_change, variant_type, variant_class_type, codon)
                 
 
 
@@ -61,17 +62,22 @@ def get_mutation_exclusions(config):
     If none are provided in the config, defaults are used.
     '''
     # TODO: actually use config defaults
-    if not config.get('maf', 'mutation_types'):
+    if not config.get('maf', 'mutation_types_blacklist'):
         exclude_mutations = set(["Silent", "Intron", "3'UTR", "5'UTR", "IGR", "Intron", "lincRNA"])
     else:
-        exclude_mutations = set(','.split(config.get('maf', 'mutation_types')))
+        exclude_mutations = set(','.split(config.get('maf', 'mutation_types_blacklist')))
 
-    if not config.get('maf', 'mutation_classes'):
-        exclude_classes = set(["Germline"])
+    if not config.get('maf', 'mutation_status_blacklist'):
+        exclude_status = set(["Germline"])
     else:
-        exclude_classes = set(','.split(config.get('maf', 'mutation_classes')))
+        exclude_status = set(','.split(config.get('maf', 'mutation_status_blacklist')))
 
-    return exclude_classes, exclude_mutations
+    if not config.get('maf', 'validation_status_blacklist'):
+        exclude_validation = set(["Germline"])
+    else:
+        exclude_validation = set(','.split(config.get('maf', 'validation_status_blacklist')))
+
+    return exclude_mutations, exclude_status, exclude_validation
 
 def define_indices(header_line):
     '''
@@ -82,19 +88,18 @@ def define_indices(header_line):
     indice_dict = {key.lower():index for index, key in enumerate(header_line)}
 
     # List of possible column names for data we care about
-    hugo = ["hugo_symbol"]  # GENE NAME
+    gene_name = ["hugo_symbol"]  # GENE NAME
     sample = ["tumor_sample_barcode"]	# SAMPLE NAME
     variant_class_type = ["variant_classification"]	# SILENT OR NOT
-    valid_stat = ["validation_status"] # FOR WILDTYPE CHECKING
+    valid_status = ["validation_status"] # FOR WILDTYPE/INVALID CHECKING
     mut_stat = ["mutation_status"] # FOR GERMLINE CHECKING
-    mutation_type = ["variant_type"] # MUTATION TYPE
-    location = ["start_position"] # FOR POSITION OF MUTATION
+    variant_type = ["variant_type"] # MUTATION TYPE
     codon = ["codon_change", "c_position", "c_position_wu", "chromchange", "amino_acids"] # CODON
     aachange = ["protein_change", "amino_acid_change", "aachange", "amino_acid_change_wu", "hgvsp_short"] # Protein change
     transcript_id = ["refseq_mrna_id", "transcript_name", "transcript_name_wu", "transcriptid", "transcript_id"]
 
-    header_name_list = [hugo, sample, variant_class_type, mutation_type, valid_stat, 
-                        mut_stat, location, transcript_id, codon, aachange]
+    header_name_list = [gene_name, sample, variant_class_type, variant_type, valid_status, 
+                        mut_stat, transcript_id, codon, aachange]
 
     indice_list = []
     for header_options in header_name_list:
@@ -103,19 +108,34 @@ def define_indices(header_line):
             raise IndexError("Names %s not found" % str(header_options))
         else:
             indice_list.append(indice_dict[existing_headers.pop()])
-    assert len(indice_list) == 10
+            
+    assert len(indice_list) == 9
     return indice_list
 
-def get_amino_acid_change(aa_change, mutation_type, variant_class_type, codon):
+def get_amino_acid_change(aa_change, variant_type, variant_class_type, codon):
     '''
     Attempt to parse amino acid change and change location.
     '''
-    aa_new, aa_old, aa_location = None, None, None
+    aa_new, aa_original, aa_location = None, None, None
 
     if aa_change and aa_change not in ("N/A", ".", "NULL"):
-        pass
+        if variant_type in ("SNP", "DNP", "TNP", "ONP"):
+            if variant_class_type in ("Missense_Mutation", "Nonsense_Mutation",
+                                      "RNA", "Translation_Start_Site", "Start_Codon_SNP"):
+                aa_original, aa_new, aa_location = snp_mutation(aa_change)
+            elif variant_class_type == "Splice_Site":
+                aa_original, aa_new, aa_location = splice_site_mutation(aa_change, codon)
+            else:
+                sys.stderr.write("New mutation effect can't be parsed: %s\n" % variant_class_type)
+                exit(1)
 
-    return aa_new, aa_old, aa_location
+        elif variant_type in ("DEL", "INS"):
+            aa_original, aa_new, aa_location = ins_del_mutation(aa_change, codon)
+        else:
+            sys.stderr.write("New mutation type can't be parsed: %s\n" % variant_type)
+            exit(1)
+
+    return aa_original, aa_new, aa_location
 
 def get_parser():
     '''
