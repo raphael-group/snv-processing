@@ -20,3 +20,7 @@ Other:
   ☐ visualizations
     ☐  defualt?
     # muts of each type/gene, # of muts per sample
+Useful Links:
+  http://magi.brown.edu/upload/formats/cnas#magi-format
+  https://github.com/raphael-group/hotnet2#heat-score-generation
+  https://github.com/raphael-group/comet#input
