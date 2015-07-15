@@ -4,14 +4,21 @@ import re, sys, math, os, json, argparse, ConfigParser
 from collections import defaultdict
 
 def process_maf_file(maf_path, transcipt_dict, sample_whitelist, gene_whitelist, config):
-    # 1. Identify file indices
-    #
+
     indice_list = None
+    transcript_db = None
+    unparseable_aa = []
+    missing_transcripts = set()
 
+    # Used for MAGI output
     gene_to_sample = defaultdict(lambda: defaultdict())
-    sample_to_gene = defaultdict(lambda: defaultdict())
 
-    exclude_mutations, exclude_status, exclude_validation = get_mutation_exclusions(config)
+    # Used for CoMEt/HotNet2 output
+    sample_to_gene = defaultdict(set)
+
+    exclude_mutations = set(','.split(config.get('maf', 'mutation_types_blacklist')))
+    exclude_status = set(','.split(config.get('maf', 'mutation_status_blacklist')))
+    exclude_validation = set(','.split(config.get('maf', 'validation_status_blacklist')))
 
     with open(maf_path) as maf_file:
         for line in maf_file:
@@ -36,6 +43,18 @@ def process_maf_file(maf_path, transcipt_dict, sample_whitelist, gene_whitelist,
             if sample_whitelist and sample not in sample_whitelist:
                 continue
 
+            # Identify which database the transcript is from. If none can be found,
+            # add transcript id to missing transcript set and move to next line
+            if not transcript_db:
+                for database_name, transcript_list in transcipt_dict.iteritems():
+                    if transcript_id in transcript_list:
+                        transcript_db = database_name
+                        break 
+                if not transcript_db:
+                    missing_transcripts.add(transcript_id)
+                    continue
+
+
             # take only first three segments of name if sample is from TCGA
             if sample[:4] == 'TCGA':
                 sample = '-'.join((sample.split('-'))[:3])
@@ -43,41 +62,23 @@ def process_maf_file(maf_path, transcipt_dict, sample_whitelist, gene_whitelist,
             # Javascript can't have "." in gene names
             gene = gene.replace(".", "-")
 
-
-
             if (mutation_status not in exclude_status 
-             and variant_class_type not in exclude_mutations
-             and valid_status not in exclude_validation):
-
-                original_amino_acid, new_amino_acid, amino_acid_location = get_amino_acid_change(
+                    and variant_class_type not in exclude_mutations
+                    and valid_status not in exclude_validation):
+                try:
+                    original_amino_acid, new_amino_acid, amino_acid_location = get_amino_acid_change(
                                                 aa_change, variant_type, variant_class_type, codon)
-                
+                except ValueError:
+                    unparseable_aa.append(aa_change)
+                    continue
+
+                if original_amino_acid and new_amino_acid and amino_acid_location:
+                    # check if transcript is in database, if so add to final
+                    pass
+
 
 
     return 0
-
-def get_mutation_exclusions(config):
-    '''
-    Return the two exclusion sets, mutation types and mutation classes.
-    If none are provided in the config, defaults are used.
-    '''
-    # TODO: actually use config defaults
-    if not config.get('maf', 'mutation_types_blacklist'):
-        exclude_mutations = set(["Silent", "Intron", "3'UTR", "5'UTR", "IGR", "Intron", "lincRNA"])
-    else:
-        exclude_mutations = set(','.split(config.get('maf', 'mutation_types_blacklist')))
-
-    if not config.get('maf', 'mutation_status_blacklist'):
-        exclude_status = set(["Germline"])
-    else:
-        exclude_status = set(','.split(config.get('maf', 'mutation_status_blacklist')))
-
-    if not config.get('maf', 'validation_status_blacklist'):
-        exclude_validation = set(["Germline"])
-    else:
-        exclude_validation = set(','.split(config.get('maf', 'validation_status_blacklist')))
-
-    return exclude_mutations, exclude_status, exclude_validation
 
 def define_indices(header_line):
     '''
@@ -176,7 +177,9 @@ def run(args, config):
     gene_whitelist = config.get('whitelists', 'gene')
     maf_file = config.get('maf', 'file')
 
-    transcript_dict = json.load(open(config.get('transcript', 'database')))
+    with open(config.get('transcript', 'database')) as t_file:
+        transcript_dict = json.load(t_file)
+
     process_maf_file(maf_file, transcript_dict, sample_whitelist, gene_whitelist, config)
 
     _ = args.output_prefix
