@@ -3,7 +3,7 @@
 import re, sys, math, os, json, argparse, ConfigParser
 from collections import defaultdict
 
-def process_maf_file(maf_path, transcipt_dict, sample_whitelist, gene_whitelist, config):
+def process_maf_file(maf_path, transcript_dict, sample_whitelist, gene_whitelist, config):
 
     indice_list = None
     transcript_db = None
@@ -11,14 +11,14 @@ def process_maf_file(maf_path, transcipt_dict, sample_whitelist, gene_whitelist,
     missing_transcripts = set()
 
     # Used for MAGI output
-    gene_to_sample = defaultdict(lambda: defaultdict())
+    gene_to_sample = defaultdict(lambda: defaultdict(list))
 
     # Used for CoMEt/HotNet2 output
     sample_to_gene = defaultdict(set)
 
-    exclude_mutations = set(','.split(config.get('maf', 'mutation_types_blacklist')))
-    exclude_status = set(','.split(config.get('maf', 'mutation_status_blacklist')))
-    exclude_validation = set(','.split(config.get('maf', 'validation_status_blacklist')))
+    exclude_mutations = set(config.get('maf', 'mutation_types_blacklist').lower().split(','))
+    exclude_status = set(config.get('maf', 'mutation_status_blacklist').lower().split(','))
+    exclude_validation = set(config.get('maf', 'validation_status_blacklist').lower().split(','))
 
     with open(maf_path) as maf_file:
         for line in maf_file:
@@ -34,8 +34,14 @@ def process_maf_file(maf_path, transcipt_dict, sample_whitelist, gene_whitelist,
                 indice_list = define_indices(line)
                 continue
 
+            x = [line[i] for i in indice_list]
             [gene, sample, variant_class_type, variant_type, valid_status,
-                mutation_status, transcript_id, codon, aa_change] = [line[i] for i in indice_list]
+                mutation_status, transcript_id, codon, aa_change] = x
+
+                #'ABCA2'
+            if gene == "ABCA2":
+                print x
+
 
             # If a whitelist is provided, skip any genes/samples not in the list
             if gene_whitelist and gene not in gene_whitelist:
@@ -43,17 +49,21 @@ def process_maf_file(maf_path, transcipt_dict, sample_whitelist, gene_whitelist,
             if sample_whitelist and sample not in sample_whitelist:
                 continue
 
-            # Identify which database the transcript is from. If none can be found,
-            # add transcript id to missing transcript set and move to next line
-            if not transcript_db:
-                for database_name, transcript_list in transcipt_dict.iteritems():
-                    if transcript_id in transcript_list:
-                        transcript_db = database_name
-                        break 
-                if not transcript_db:
-                    missing_transcripts.add(transcript_id)
-                    continue
 
+
+            if '.' in transcript_id:
+                transcript_id = transcript_id.split('.')[0]
+
+            # Search all transcript databases for transcript id and
+            # return corresponding length if found. If none is found,
+            # add to missing transcripts set and ignore this mutation
+            length = None
+            for name,database in transcript_dict.items():
+                if transcript_id in database:
+                    length = database[transcript_id]
+            if not length:
+                missing_transcripts.add(transcript_id)
+                continue
 
             # take only first three segments of name if sample is from TCGA
             if sample[:4] == 'TCGA':
@@ -62,9 +72,9 @@ def process_maf_file(maf_path, transcipt_dict, sample_whitelist, gene_whitelist,
             # Javascript can't have "." in gene names
             gene = gene.replace(".", "-")
 
-            if (mutation_status not in exclude_status 
-                    and variant_class_type not in exclude_mutations
-                    and valid_status not in exclude_validation):
+            if (length and mutation_status.lower() not in exclude_status 
+                    and variant_class_type.lower() not in exclude_mutations
+                    and valid_status.lower() not in exclude_validation):
                 try:
                     original_amino_acid, new_amino_acid, amino_acid_location = get_amino_acid_change(
                                                 aa_change, variant_type, variant_class_type, codon)
@@ -73,12 +83,15 @@ def process_maf_file(maf_path, transcipt_dict, sample_whitelist, gene_whitelist,
                     continue
 
                 if original_amino_acid and new_amino_acid and amino_acid_location:
-                    # check if transcript is in database, if so add to final
-                    pass
+
+                        sample_to_gene[sample].add(gene)
+                        gene_to_sample[gene][sample].append({'transcript':transcript_id,
+                             'length':length,  'locus':amino_acid_location, 'mutation_type': variant_class_type,    
+                             'o_amino_acid':original_amino_acid, 'n_amino_acid':new_amino_acid})
 
 
 
-    return 0
+    return gene_to_sample, sample_to_gene
 
 def define_indices(header_line):
     '''
@@ -126,6 +139,8 @@ def get_amino_acid_change(aa_change, variant_type, variant_class_type, codon):
                 aa_original, aa_new, aa_location = snp_mutation(aa_change)
             elif variant_class_type == "Splice_Site":
                 aa_original, aa_new, aa_location = splice_site_mutation(aa_change, codon)
+            elif (variant_class_type in ('5\'Flank','Read-through',"Nonstop_Mutation")):
+                return None, None, None
             else:
                 sys.stderr.write("New mutation effect can't be parsed: %s\n" % variant_class_type)
                 exit(1)
@@ -180,20 +195,36 @@ def run(args, config):
     with open(config.get('transcript', 'database')) as t_file:
         transcript_dict = json.load(t_file)
 
-    process_maf_file(maf_file, transcript_dict, sample_whitelist, gene_whitelist, config)
+    gene_to_sample, sample_to_gene = process_maf_file(maf_file, transcript_dict, sample_whitelist, gene_whitelist, config)
+
+
+
+    with open("outfile.tsv","w") as outfile:
+        header = "#Gene\tSample\tTranscript\tTranscript_Length\tLocus\t"\
+                 "Mutation_Type\tOriginal_Amino_Acid\tNew_Amino_Acid\n"
+        outfile.write(header)
+        for gene, samplelist in sorted(gene_to_sample.items()):
+            for sample in samplelist:
+                for mut in samplelist[sample]:
+                    outfile.write('\t'.join([gene,sample,mut['transcript'],str(mut['length']),
+                        mut['locus'],mut['mutation_type'],mut['o_amino_acid'],mut['n_amino_acid']])+'\n')
+                    # outfile.write(gene+'\t'+sample+'\t'+str(muts)+'\n')
+
+# {'transcript':transcript_id,
+#  'length':length,  'locus':amino_acid_location, 'mtutation_type': variant_class_type,    
+#  'o_amino_acid':original_amino_acid, 'n_amino_acid':new_amino_acid}
+
 
     _ = args.output_prefix
 
-
-if __name__ == '__main__':
-    run(get_parser().parse_args(sys.argv[1:]), get_config())
 
 
 ## BELOW IS OLD CODE, included just to get this working. Need to survey
 ## MAF files to get an idea of how to improve amino acid change info extraction
 ################################################################################
 # Parse the different mutation formats to get the amino acid change
-def snp_mutation( aa_change ):
+
+def snp_mutation(aa_change):
     # parsing SNP, DNP and TNP
     aao, aan, aaloc = "", "", ""
     
@@ -259,3 +290,9 @@ def ins_del_mutation(aa_change, codon):
         raise ValueError("Error format can't be parsed: " + aa_change + "\n")
     
     return aao, aan, aaloc
+
+
+
+
+if __name__ == '__main__':
+    run(get_parser().parse_args(sys.argv[1:]), get_config())
