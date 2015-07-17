@@ -2,13 +2,14 @@
 
 import re, sys, math, os, json, argparse, ConfigParser
 import matplotlib.pyplot as plt
+import numpy as np
 from collections import defaultdict
 
 def process_maf_file(maf_path, transcript_dict, sample_whitelist, gene_whitelist, config):
 
     indice_list = None
     stats = {'total_mutations':0, 'processed_mutations':0, 'missing_transcripts':set(), 
-             'samples':set(), 'genes':set(), 'mutation_types':defaultdict(lambda: 0),
+             'samples':defaultdict(lambda: 0), 'genes':defaultdict(lambda: 0), 'mutation_types':defaultdict(lambda: 0),
              'unknown_mutations':set()}
 
     # Used for MAGI output
@@ -82,8 +83,8 @@ def process_maf_file(maf_path, transcript_dict, sample_whitelist, gene_whitelist
                     continue
 
                 if original_amino_acid and new_amino_acid and amino_acid_location:
-                    stats['samples'].add(sample)
-                    stats['genes'].add(gene)
+                    stats['samples'][sample] += 1
+                    stats['genes'][gene] += 1
                     stats['processed_mutations'] += 1
                     stats['mutation_types'][variant_class_type] += 1
 
@@ -166,9 +167,7 @@ def write_magi(gene_to_sample, outfile_name):
                 for mut in samplelist[sample]:
                     outfile.write('\t'.join([gene,sample, mut['transcript'], str(mut['length']),
                         mut['locus'], mut['mutation_type'], mut['o_amino_acid'], mut['n_amino_acid']])+'\n')
-def write_hotnet2():
-    pass
-def write_comet():
+def write_other(sample_to_gene):
     pass
 
 def output_stats(stats):
@@ -198,6 +197,46 @@ def output_stats(stats):
     for line in output_list:
         print line
 
+def visualize_data(stats, gene_to_sample):
+
+    plot_items = []
+    plot_value = []
+
+    for mutation, quantity in stats['mutation_types'].items():
+        plot_items.append(mutation)
+        plot_value.append(quantity)
+
+    y_pos = np.arange(len(plot_items))
+    plt.barh(y_pos, np.array(plot_value), align='center', alpha=0.4)
+    plt.yticks(y_pos, plot_items)
+    plt.xlabel('Total mutations')
+
+    plt.show()
+
+    # maybe change this to x axis = # of mutations, y axis = # of the genes with that many mutations
+    # fig_size = plt.rcParams["figure.figsize"]
+     
+    # # Prints: [8.0, 6.0]
+    # print "Current size:", fig_size
+    # fig_size[1] = 30
+     
+    # # Set figure width to 12 and height to 9
+    # # fig_size[0] = 12
+    # # fig_size[1] = 9
+
+    # plot_items = []
+    # plot_value = []
+
+    # for gene, quantity in stats['genes'].items():
+    #     plot_items.append(gene)
+    #     plot_value.append(quantity)
+
+    # y_pos = np.arange(len(plot_items))
+    # plt.barh(y_pos, np.array(plot_value), align='center', alpha=0.4,)
+    # plt.yticks(y_pos, plot_items)
+    # plt.xlabel('Total mutations')
+
+    # plt.show()
 
 
 def get_parser():
@@ -211,8 +250,6 @@ def get_parser():
                         type=str, help="Inactivating mutation types.",
                         default=["frame_shift_ins", "nonstop_mutation", "nonsense_mutation",
                                  "splice_site", "frame_shift_del"])
-
-    parser.add_argument('-o', '--output_prefix', default=None, help='Output prefix.')
     parser.add_argument('-s', '--statistics', action='store_true')
     parser.add_argument('-v', '--visualization', action='store_true')
 
@@ -251,11 +288,13 @@ def run(args, config):
 
 
     write_magi(gene_to_sample, config.get('general', 'output'))
+    write_other(sample_to_gene)
 
     if args.statistics:
         output_stats(stats)
 
-    _ = args.output_prefix
+    if args.visualization:
+        visualize_data(stats, gene_to_sample)
 
 
 
