@@ -1,14 +1,15 @@
 #!/usr/bin/python
 
 import re, sys, math, os, json, argparse, ConfigParser
+import matplotlib.pyplot as plt
 from collections import defaultdict
 
 def process_maf_file(maf_path, transcript_dict, sample_whitelist, gene_whitelist, config):
 
     indice_list = None
-    transcript_db = None
-    unparseable_aa = []
-    missing_transcripts = set()
+    stats = {'total_mutations':0, 'processed_mutations':0, 'missing_transcripts':set(), 
+             'samples':set(), 'genes':set(), 'mutation_types':defaultdict(lambda: 0),
+             'unknown_mutations':set()}
 
     # Used for MAGI output
     gene_to_sample = defaultdict(lambda: defaultdict(list))
@@ -27,6 +28,8 @@ def process_maf_file(maf_path, transcript_dict, sample_whitelist, gene_whitelist
             if line.startswith('#'):
                 continue
 
+            stats['total_mutations'] += 1
+
             line = line.rstrip().split('\t')
 
             # Indentify indices of relevant columns
@@ -34,13 +37,9 @@ def process_maf_file(maf_path, transcript_dict, sample_whitelist, gene_whitelist
                 indice_list = define_indices(line)
                 continue
 
-            x = [line[i] for i in indice_list]
             [gene, sample, variant_class_type, variant_type, valid_status,
-                mutation_status, transcript_id, codon, aa_change] = x
+             mutation_status, transcript_id, codon, aa_change] = [line[i] for i in indice_list]
 
-                #'ABCA2'
-            if gene == "ABCA2":
-                print x
 
 
             # If a whitelist is provided, skip any genes/samples not in the list
@@ -62,10 +61,7 @@ def process_maf_file(maf_path, transcript_dict, sample_whitelist, gene_whitelist
                 if transcript_id in database:
                     length = database[transcript_id]
             if not length:
-                missing_transcripts.add(transcript_id)
-                print transcript_id + " Not found"
-                if transcript_id == '':
-                    print "Empty transcript ID for " + gene + ' ' + sample
+                stats['missing_transcripts'].add(transcript_id)
                 continue
 
             # take only first three segments of name if sample is from TCGA
@@ -82,19 +78,23 @@ def process_maf_file(maf_path, transcript_dict, sample_whitelist, gene_whitelist
                     original_amino_acid, new_amino_acid, amino_acid_location = get_amino_acid_change(
                                                 aa_change, variant_type, variant_class_type, codon)
                 except ValueError:
-                    unparseable_aa.append(aa_change)
+                    stats['unknown_mutations'].add(aa_change + variant_type + variant_class_type)
                     continue
 
                 if original_amino_acid and new_amino_acid and amino_acid_location:
+                    stats['samples'].add(sample)
+                    stats['genes'].add(gene)
+                    stats['processed_mutations'] += 1
+                    stats['mutation_types'][variant_class_type] += 1
 
-                        sample_to_gene[sample].add(gene)
-                        gene_to_sample[gene][sample].append({'transcript':transcript_id,
-                             'length':length,  'locus':amino_acid_location, 'mutation_type': variant_class_type,    
-                             'o_amino_acid':original_amino_acid, 'n_amino_acid':new_amino_acid})
+                    sample_to_gene[sample].add(gene)
+                    gene_to_sample[gene][sample].append({'transcript':transcript_id,
+                         'length':length, 'locus':amino_acid_location, 'mutation_type': variant_class_type,
+                         'o_amino_acid':original_amino_acid, 'n_amino_acid':new_amino_acid})
 
 
 
-    return gene_to_sample, sample_to_gene
+    return gene_to_sample, sample_to_gene, stats
 
 def define_indices(header_line):
     '''
@@ -142,7 +142,7 @@ def get_amino_acid_change(aa_change, variant_type, variant_class_type, codon):
                 aa_original, aa_new, aa_location = snp_mutation(aa_change)
             elif variant_class_type == "Splice_Site":
                 aa_original, aa_new, aa_location = splice_site_mutation(aa_change, codon)
-            elif (variant_class_type in ('5\'Flank','Read-through',"Nonstop_Mutation")):
+            elif variant_class_type in ('5\'Flank', 'Read-through', "Nonstop_Mutation"):
                 return None, None, None
             else:
                 sys.stderr.write("New mutation effect can't be parsed: %s\n" % variant_class_type)
@@ -155,6 +155,50 @@ def get_amino_acid_change(aa_change, variant_type, variant_class_type, codon):
             exit(1)
 
     return aa_original, aa_new, aa_location
+
+def write_magi(gene_to_sample, outfile_name):
+    with open(outfile_name+".tsv", "w") as outfile:
+        header = "#Gene\tSample\tTranscript\tTranscript_Length\tLocus\t"\
+                     "Mutation_Type\tOriginal_Amino_Acid\tNew_Amino_Acid\n"
+        outfile.write(header)
+        for gene, samplelist in sorted(gene_to_sample.items()):
+            for sample in samplelist:
+                for mut in samplelist[sample]:
+                    outfile.write('\t'.join([gene,sample, mut['transcript'], str(mut['length']),
+                        mut['locus'], mut['mutation_type'], mut['o_amino_acid'], mut['n_amino_acid']])+'\n')
+def write_hotnet2():
+    pass
+def write_comet():
+    pass
+
+def output_stats(stats):
+# stats = {'total_mutations':0, 'processed_mutations:':0, 'missing_transcripts':set(), 
+#      'samples':set(), 'genes':set(), 'mutation_types':defaultdict(lambda: 0),
+#      'unknown_mutations':set()}
+
+    output_list = []
+    output_list.append("*** Summary statistics ***")
+    output_list.append("*  Total mutations in file: " + str(stats['total_mutations']))
+    output_list.append("*  Mutations successfully processed: " + str(stats['processed_mutations']))
+    output_list.append("*  Success ratio: " + str(float(stats['total_mutations']) / stats['processed_mutations']))
+    output_list.append("*  Unique samples: " + str(len(stats['samples'])))
+    output_list.append("*  Unique genes: " + str(len(stats['genes'])))
+    output_list.append("*  Mutation types and totals:")
+    for mut_type, quantity in stats['mutation_types'].items():
+        output_list.append(mut_type + ' ' + str(quantity))
+    if len(stats['missing_transcripts']) > 0 :
+        output_list.append("*  Missing transcripts:")
+        for transcript in stats['missing_transcripts']:
+            output_list.append("**  " + transcript)
+    if len(stats['unknown_mutations']) > 0 :
+        output_list.append("*  Unknown mutations:")
+        for mutation in stats['unknown_mutations']:
+            output_list.append("**  " + mutation)
+
+    for line in output_list:
+        print line
+
+
 
 def get_parser():
     '''
@@ -169,6 +213,7 @@ def get_parser():
                                  "splice_site", "frame_shift_del"])
 
     parser.add_argument('-o', '--output_prefix', default=None, help='Output prefix.')
+    parser.add_argument('-s', '--statistics', action='store_true')
 
     return parser
 
@@ -184,6 +229,9 @@ def get_config():
     if not os.path.isfile(config.get('transcript', 'database')):
         raise IOError('Error: Transcript database file not found. Please check location in configuration file')
 
+    if not config.has_option('general','output') or config.get('general','output') == '':
+        config.set('general','output',os.path.basename(config.get('maf', 'file'))[:10])
+
     return config
 
 def run(args, config):
@@ -198,25 +246,12 @@ def run(args, config):
     with open(config.get('transcript', 'database')) as t_file:
         transcript_dict = json.load(t_file)
 
-    gene_to_sample, sample_to_gene = process_maf_file(maf_file, transcript_dict, sample_whitelist, gene_whitelist, config)
+    gene_to_sample, sample_to_gene, stats = process_maf_file(maf_file, transcript_dict, sample_whitelist, gene_whitelist, config)
 
 
+    write_magi(gene_to_sample, config.get('general', 'output'))
 
-    with open("outfile.tsv","w") as outfile:
-        header = "#Gene\tSample\tTranscript\tTranscript_Length\tLocus\t"\
-                 "Mutation_Type\tOriginal_Amino_Acid\tNew_Amino_Acid\n"
-        outfile.write(header)
-        for gene, samplelist in sorted(gene_to_sample.items()):
-            for sample in samplelist:
-                for mut in samplelist[sample]:
-                    outfile.write('\t'.join([gene,sample,mut['transcript'],str(mut['length']),
-                        mut['locus'],mut['mutation_type'],mut['o_amino_acid'],mut['n_amino_acid']])+'\n')
-                    # outfile.write(gene+'\t'+sample+'\t'+str(muts)+'\n')
-
-# {'transcript':transcript_id,
-#  'length':length,  'locus':amino_acid_location, 'mtutation_type': variant_class_type,    
-#  'o_amino_acid':original_amino_acid, 'n_amino_acid':new_amino_acid}
-
+    output_stats(stats)
 
     _ = args.output_prefix
 
