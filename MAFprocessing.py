@@ -58,11 +58,14 @@ def process_maf_file(maf_path, transcript_dict, sample_whitelist, gene_whitelist
             # return corresponding length if found. If none is found,
             # add to missing transcripts set and ignore this mutation
             length = None
-            for name,database in transcript_dict.items():
+            for _, database in transcript_dict.items():
                 if transcript_id in database:
                     length = database[transcript_id]
             if not length:
                 missing_transcripts.add(transcript_id)
+                print transcript_id + " Not found"
+                if transcript_id == '':
+                    print "Empty transcript ID for " + gene + ' ' + sample
                 continue
 
             # take only first three segments of name if sample is from TCGA
