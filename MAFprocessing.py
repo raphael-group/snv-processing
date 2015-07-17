@@ -214,6 +214,7 @@ def get_parser():
 
     parser.add_argument('-o', '--output_prefix', default=None, help='Output prefix.')
     parser.add_argument('-s', '--statistics', action='store_true')
+    parser.add_argument('-v', '--visualization', action='store_true')
 
     return parser
 
@@ -251,7 +252,8 @@ def run(args, config):
 
     write_magi(gene_to_sample, config.get('general', 'output'))
 
-    output_stats(stats)
+    if args.statistics:
+        output_stats(stats)
 
     _ = args.output_prefix
 
