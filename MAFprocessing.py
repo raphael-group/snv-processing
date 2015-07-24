@@ -154,7 +154,7 @@ def get_amino_acid_change(aa_change, variant_type, variant_class_type, codon):
     return aa_original, aa_new, aa_location
 
 def write_magi(gene_to_sample, outfile_name):
-    with open(outfile_name+".tsv", "w") as outfile:
+    with open(outfile_name+"_maf_magi.tsv", "w") as outfile:
         header = "#Gene\tSample\tTranscript\tTranscript_Length\tLocus\t"\
                      "Mutation_Type\tOriginal_Amino_Acid\tNew_Amino_Acid\n"
         outfile.write(header)
@@ -167,7 +167,7 @@ def write_magi(gene_to_sample, outfile_name):
 def write_other(sample_to_gene, config):
     pass
 
-def output_stats(stats):
+def output_stats(stats, config):
 # stats = {'total_mutations':0, 'processed_mutations:':0, 'missing_transcripts':set(), 
 #      'samples':set(), 'genes':set(), 'mutation_types':defaultdict(lambda: 0),
 #      'unknown_mutations':set()}
@@ -243,7 +243,7 @@ def get_parser():
 
     parser = argparse.ArgumentParser(description='Parse MAF files')
 
-    parser.add_argument('-f', '--file', action='store_true', help='Path to MAF file to be processed')
+    parser.add_argument('-f', '--file', help='Path to MAF file to be processed')
     parser.add_argument('-s', '--statistics', action='store_true')
     parser.add_argument('-v', '--visualization', action='store_true')
 
@@ -269,8 +269,8 @@ def get_config(args):
     if not os.path.isfile(config.get('options', 'database')):
         raise IOError('Error: Transcript database file not found. Please check location in configuration file')
 
-    if not config.has_option('options','output') or config.get('options','output') == '':
-        config.set('options','output',os.path.basename(config.get('options', 'file'))[:10])
+    if not config.has_option('options','prefix') or config.get('options','prefix') == '':
+        config.set('options','prefix',os.path.basename(config.get('options', 'file'))[:10])
 
     return config
 
@@ -288,14 +288,14 @@ def run(config):
 
     gene_to_sample, sample_to_gene, stats = process_maf_file(maf_file, transcript_dict, sample_whitelist, gene_whitelist, config)
 
-    write_magi(gene_to_sample, config.get('options', 'output'))
+    write_magi(gene_to_sample, config.get('options', 'prefix'))
     write_other(sample_to_gene, config)
 
     if config.getboolean('options','statistics'):
-        output_stats(stats)
+        output_stats(stats, config)
 
     if config.getboolean('options','visualization'):
-        visualize_data(stats, gene_to_sample)
+        visualize_data(stats, gene_to_sample, config)
 
 
 
