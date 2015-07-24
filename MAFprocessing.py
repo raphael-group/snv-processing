@@ -18,9 +18,9 @@ def process_maf_file(maf_path, transcript_dict, sample_whitelist, gene_whitelist
     # Used for CoMEt/HotNet2 output
     sample_to_gene = defaultdict(set)
 
-    exclude_mutations = set(config.get('maf', 'mutation_types_blacklist').lower().split(','))
-    exclude_status = set(config.get('maf', 'mutation_status_blacklist').lower().split(','))
-    exclude_validation = set(config.get('maf', 'validation_status_blacklist').lower().split(','))
+    exclude_mutations = set(config.get('options', 'mutation_types_blacklist').lower().split(','))
+    exclude_status = set(config.get('options', 'mutation_status_blacklist').lower().split(','))
+    exclude_validation = set(config.get('options', 'validation_status_blacklist').lower().split(','))
 
     with open(maf_path) as maf_file:
         for line in maf_file:
@@ -243,54 +243,58 @@ def get_parser():
 
     parser = argparse.ArgumentParser(description='Parse MAF files')
 
-    parser.add_argument('-ia', '--inactive_types', nargs="*",
-                        type=str, help="Inactivating mutation types.",
-                        default=["frame_shift_ins", "nonstop_mutation", "nonsense_mutation",
-                                 "splice_site", "frame_shift_del"])
+    parser.add_argument('-f', '--file', action='store_true', help='Path to MAF file to be processed')
     parser.add_argument('-s', '--statistics', action='store_true')
     parser.add_argument('-v', '--visualization', action='store_true')
 
     return parser
 
-def get_config():
+def get_config(args):
+
     config = ConfigParser.SafeConfigParser()
     found = config.read('maf.cfg')
     if not found:
         raise IOError("Error: Config file not found!")
 
-    if not os.path.isfile(config.get('maf', 'file')):
+    # Integrate command line arguments into configuration
+    for arg in vars(args):
+        attribute = getattr(args, arg)
+        if attribute:
+            config.set('options', arg, str(attribute))
+
+
+    if not os.path.isfile(config.get('options', 'file')):
         raise IOError('Error: MAF file not found. Please check location in configuration file')
 
-    if not os.path.isfile(config.get('transcript', 'database')):
+    if not os.path.isfile(config.get('options', 'database')):
         raise IOError('Error: Transcript database file not found. Please check location in configuration file')
 
-    if not config.has_option('general','output') or config.get('general','output') == '':
-        config.set('general','output',os.path.basename(config.get('maf', 'file'))[:10])
+    if not config.has_option('options','output') or config.get('options','output') == '':
+        config.set('options','output',os.path.basename(config.get('options', 'file'))[:10])
 
     return config
 
-def run(args, config):
+def run(config):
     '''
     Main function.
     '''
 
-    sample_whitelist = config.get('whitelists', 'sample')
-    gene_whitelist = config.get('whitelists', 'gene')
-    maf_file = config.get('maf', 'file')
+    sample_whitelist = config.get('options', 'sample')
+    gene_whitelist = config.get('options', 'gene')
+    maf_file = config.get('options', 'file')
 
-    with open(config.get('transcript', 'database')) as t_file:
+    with open(config.get('options', 'database')) as t_file:
         transcript_dict = json.load(t_file)
 
     gene_to_sample, sample_to_gene, stats = process_maf_file(maf_file, transcript_dict, sample_whitelist, gene_whitelist, config)
 
-
-    write_magi(gene_to_sample, config.get('general', 'output'))
+    write_magi(gene_to_sample, config.get('options', 'output'))
     write_other(sample_to_gene, config)
 
-    if args.statistics:
+    if config.getboolean('options','statistics'):
         output_stats(stats)
 
-    if args.visualization:
+    if config.getboolean('options','visualization'):
         visualize_data(stats, gene_to_sample)
 
 
@@ -371,4 +375,4 @@ def ins_del_mutation(aa_change, codon):
 
 
 if __name__ == '__main__':
-    run(get_parser().parse_args(sys.argv[1:]), get_config())
+    run(get_config(get_parser().parse_args(sys.argv[1:])))
