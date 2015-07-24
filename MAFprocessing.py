@@ -41,15 +41,11 @@ def process_maf_file(maf_path, transcript_dict, sample_whitelist, gene_whitelist
             [gene, sample, variant_class_type, variant_type, valid_status,
              mutation_status, transcript_id, codon, aa_change] = [line[i] for i in indice_list]
 
-
-
             # If a whitelist is provided, skip any genes/samples not in the list
             if gene_whitelist and gene not in gene_whitelist:
                 continue
             if sample_whitelist and sample not in sample_whitelist:
                 continue
-
-
 
             if '.' in transcript_id:
                 transcript_id = transcript_id.split('.')[0]
@@ -167,7 +163,8 @@ def write_magi(gene_to_sample, outfile_name):
                 for mut in samplelist[sample]:
                     outfile.write('\t'.join([gene,sample, mut['transcript'], str(mut['length']),
                         mut['locus'], mut['mutation_type'], mut['o_amino_acid'], mut['n_amino_acid']])+'\n')
-def write_other(sample_to_gene):
+
+def write_other(sample_to_gene, config):
     pass
 
 def output_stats(stats):
@@ -257,7 +254,7 @@ def get_parser():
 
 def get_config():
     config = ConfigParser.SafeConfigParser()
-    found = config.read('config.cfg')
+    found = config.read('maf.cfg')
     if not found:
         raise IOError("Error: Config file not found!")
 
@@ -288,7 +285,7 @@ def run(args, config):
 
 
     write_magi(gene_to_sample, config.get('general', 'output'))
-    write_other(sample_to_gene)
+    write_other(sample_to_gene, config)
 
     if args.statistics:
         output_stats(stats)
