@@ -153,8 +153,8 @@ def get_amino_acid_change(aa_change, variant_type, variant_class_type, codon):
 
     return aa_original, aa_new, aa_location
 
-def write_magi(gene_to_sample, outfile_name):
-    with open(outfile_name+"_maf_magi.tsv", "w") as outfile:
+def write_magi(gene_to_sample, config):
+    with open(config.get('options', 'prefix')+"_maf_magi.tsv", "w") as outfile:
         header = "#Gene\tSample\tTranscript\tTranscript_Length\tLocus\t"\
                      "Mutation_Type\tOriginal_Amino_Acid\tNew_Amino_Acid\n"
         outfile.write(header)
@@ -164,8 +164,17 @@ def write_magi(gene_to_sample, outfile_name):
                     outfile.write('\t'.join([gene,sample, mut['transcript'], str(mut['length']),
                         mut['locus'], mut['mutation_type'], mut['o_amino_acid'], mut['n_amino_acid']])+'\n')
 
-def write_other(sample_to_gene, config):
-    pass
+def write_other(sample_to_gene, config, out_type):
+    """
+    Writes two files, one with every gene found by gistic for each peak,
+    another with the target genes found at each peak. Row location maps
+    one to the other.
+    """
+
+    with open(config.get('options', 'prefix')+"_maf_"+out_type+".tsv", "w") as outfile:
+        for sample in sorted(sample_to_gene):
+            if len(sample_to_gene[sample]) > 0:
+                outfile.write(sample + '\t' + '\t'.join(sorted(list(sample_to_gene[sample])))+'\n')
 
 def output_stats(stats, config):
 # stats = {'total_mutations':0, 'processed_mutations:':0, 'missing_transcripts':set(), 
@@ -191,10 +200,11 @@ def output_stats(stats, config):
         for mutation in stats['unknown_mutations']:
             output_list.append("**  " + mutation)
 
-    for line in output_list:
-        print line
+    with open(config.get('options', 'prefix')+'_summary.txt', 'w') as write_file:
+        for line in output_list:
+            write_file.write(line+'\n')
 
-def visualize_data(stats, gene_to_sample):
+def visualize_data(stats, gene_to_sample, config):
 
     plot_items = []
     plot_value = []
@@ -246,6 +256,9 @@ def get_parser():
     parser.add_argument('-f', '--file', help='Path to MAF file to be processed')
     parser.add_argument('-s', '--statistics', action='store_true')
     parser.add_argument('-v', '--visualization', action='store_true')
+    parser.add_argument('-o', '--output',help="Folder to p")
+    parser.add_argument('-t', '--type', help="Output format options: magi,hotnet2,comet", type=str.lower,
+                         choices=['magi', 'hotnet2', 'comet'],nargs='+')
 
     return parser
 
@@ -270,7 +283,7 @@ def get_config(args):
         raise IOError('Error: Transcript database file not found. Please check location in configuration file')
 
     if not config.has_option('options','prefix') or config.get('options','prefix') == '':
-        config.set('options','prefix',os.path.basename(config.get('options', 'file'))[:10])
+        config.set('options','prefix',os.path.basename(config.get('options', 'file')).split('.')[0][:10])
 
     return config
 
@@ -288,8 +301,12 @@ def run(config):
 
     gene_to_sample, sample_to_gene, stats = process_maf_file(maf_file, transcript_dict, sample_whitelist, gene_whitelist, config)
 
-    write_magi(gene_to_sample, config.get('options', 'prefix'))
-    write_other(sample_to_gene, config)
+    if 'magi' in config.get('options', 'type'):
+        write_magi(gene_to_sample, config)
+    if 'comet' in config.get('options', 'type'):
+        write_other(sample_to_gene, config, 'comet')
+    if 'hotnet2' in config.get('options', 'type'):
+        write_other(sample_to_gene, config, 'hotnet2')
 
     if config.getboolean('options','statistics'):
         output_stats(stats, config)
