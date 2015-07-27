@@ -165,7 +165,7 @@ def write_magi(gene_to_sample, config):
             for sample in samplelist:
                 for mut in samplelist[sample]:
                     outfile.write('\t'.join([gene,sample, mut['transcript'], str(mut['length']),
-                        mut['locus'], mut['mutation_type'], mut['o_amino_acid'], mut['n_amino_acid']])+'\n')
+                        str(mut['locus']), mut['mutation_type'], mut['o_amino_acid'], mut['n_amino_acid']])+'\n')
 
 def write_other(sample_to_gene, config, out_type):
     """
@@ -227,7 +227,8 @@ def visualize_data(stats, gene_to_sample, config):
     plt.yticks(y_pos, plot_items)
     plt.xlabel('Total mutations')
 
-    plt.show()
+    plt.savefig('plottest.png')
+    plt.close()
 
     # maybe change this to x axis = # of mutations, y axis = # of the genes with that many mutations
     # fig_size = plt.rcParams["figure.figsize"]
