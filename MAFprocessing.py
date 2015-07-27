@@ -38,7 +38,8 @@ def process_maf_file(maf_path, transcript_dict, sample_whitelist, gene_whitelist
                 try:
                     indice_list = define_indices(line)
                 except IndexError:
-                    print "\n\nCould not parse indices of " + str(config.get('options','file'))+"\n\n"
+                    print "\nCould not parse indices of " + str(config.get('options','file'))+"\n\n"
+                    exit(1)
                 continue
 
             [gene, sample, variant_class_type, variant_type, valid_status,
