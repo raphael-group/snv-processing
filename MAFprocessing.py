@@ -268,6 +268,8 @@ def get_parser():
     parser.add_argument('-o', '--output_dir',help="Folder to output processed MAF data")
     parser.add_argument('-t', '--type', help="Output format options: magi,hotnet2,comet", type=str.lower,
                          choices=['magi', 'hotnet2', 'comet'],nargs='+')
+    parser.add_argument('-p', '--prefix', help='String to prefix output files.')
+
 
     return parser
 
