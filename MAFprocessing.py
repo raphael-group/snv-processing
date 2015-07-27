@@ -38,12 +38,20 @@ def process_maf_file(maf_path, transcript_dict, sample_whitelist, gene_whitelist
                 try:
                     indice_list = define_indices(line)
                 except IndexError:
-                    print "\nCould not parse indices of " + str(config.get('options','file'))+"\n\n"
+                    print "\nCould not parse indices of " + str(config.get('options','file'))+"\n"
                     exit(1)
                 continue
 
-            [gene, sample, variant_class_type, variant_type, valid_status,
-             mutation_status, transcript_id, codon, aa_change] = [line[i] for i in indice_list]
+            try:
+                [gene, sample, variant_class_type, variant_type, valid_status,
+                mutation_status, transcript_id, codon, aa_change] = [line[i] for i in indice_list]
+            except IndexError:
+                print "Index out of range"
+                print "Index list:"
+                print str(indice_list)
+                print "Line: "
+                print line
+                exit(1)
 
             # If a whitelist is provided, skip any genes/samples not in the list
             if gene_whitelist and gene not in gene_whitelist:
@@ -123,7 +131,8 @@ def define_indices(header_line):
     for header_options in header_name_list:
         existing_headers = set(header_options) & set(indice_dict.keys())
         if len(existing_headers) == 0:
-            raise IndexError("Names %s not found" % str(header_options))
+            print "Names %s not found" % str(header_options)
+            raise IndexError()
         else:
             indice_list.append(indice_dict[existing_headers.pop()])
             
