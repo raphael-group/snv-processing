@@ -154,7 +154,10 @@ def get_amino_acid_change(aa_change, variant_type, variant_class_type, codon):
     return aa_original, aa_new, aa_location
 
 def write_magi(gene_to_sample, config):
-    with open(config.get('options', 'prefix')+"_maf_magi.tsv", "w") as outfile:
+    out_dir = config.get('options','output_dir')
+    out_name = config.get('options', 'prefix')+"_maf_magi.tsv"
+
+    with open(os.path.join(out_dir, out_name), "w") as outfile:
         header = "#Gene\tSample\tTranscript\tTranscript_Length\tLocus\t"\
                      "Mutation_Type\tOriginal_Amino_Acid\tNew_Amino_Acid\n"
         outfile.write(header)
@@ -170,8 +173,10 @@ def write_other(sample_to_gene, config, out_type):
     another with the target genes found at each peak. Row location maps
     one to the other.
     """
+    out_dir = config.get('options','output_dir')
+    out_name = config.get('options', 'prefix')+"_maf_"+out_type+".tsv"
 
-    with open(config.get('options', 'prefix')+"_maf_"+out_type+".tsv", "w") as outfile:
+    with open(os.path.join(out_dir,out_name), "w") as outfile:
         for sample in sorted(sample_to_gene):
             if len(sample_to_gene[sample]) > 0:
                 outfile.write(sample + '\t' + '\t'.join(sorted(list(sample_to_gene[sample])))+'\n')
@@ -185,7 +190,7 @@ def output_stats(stats, config):
     output_list.append("*** Summary statistics ***")
     output_list.append("*  Total mutations in file: " + str(stats['total_mutations']))
     output_list.append("*  Mutations successfully processed: " + str(stats['processed_mutations']))
-    output_list.append("*  Success ratio: " + str(float(stats['total_mutations']) / stats['processed_mutations']))
+    output_list.append("*  Success ratio: " + str(float(stats['processed_mutations']) / stats['total_mutations']))
     output_list.append("*  Unique samples: " + str(len(stats['samples'])))
     output_list.append("*  Unique genes: " + str(len(stats['genes'])))
     output_list.append("*  Mutation types and totals:")
@@ -200,7 +205,11 @@ def output_stats(stats, config):
         for mutation in stats['unknown_mutations']:
             output_list.append("**  " + mutation)
 
-    with open(config.get('options', 'prefix')+'_summary.txt', 'w') as write_file:
+    out_dir = config.get('options','output_dir')
+    out_name = config.get('options', 'prefix')+'_summary.txt'
+
+
+    with open(os.path.join(out_dir, out_name), 'w') as write_file:
         for line in output_list:
             write_file.write(line+'\n')
 
@@ -256,7 +265,7 @@ def get_parser():
     parser.add_argument('-f', '--file', help='Path to MAF file to be processed')
     parser.add_argument('-s', '--statistics', action='store_true')
     parser.add_argument('-v', '--visualization', action='store_true')
-    parser.add_argument('-o', '--output',help="Folder to p")
+    parser.add_argument('-o', '--output_dir',help="Folder to output processed MAF data")
     parser.add_argument('-t', '--type', help="Output format options: magi,hotnet2,comet", type=str.lower,
                          choices=['magi', 'hotnet2', 'comet'],nargs='+')
 
@@ -301,6 +310,8 @@ def run(config):
 
     gene_to_sample, sample_to_gene, stats = process_maf_file(maf_file, transcript_dict, sample_whitelist, gene_whitelist, config)
 
+    if not os.path.exists(config.get('options', 'output_dir')):
+        os.makedirs(config.get('options', 'output_dir'))
     if 'magi' in config.get('options', 'type'):
         write_magi(gene_to_sample, config)
     if 'comet' in config.get('options', 'type'):
