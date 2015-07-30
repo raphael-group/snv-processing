@@ -49,7 +49,6 @@ def process_maf_file(maf_path, transcript_dict, sample_whitelist, gene_whitelist
                 [gene, sample, variant_class_type, variant_type, valid_status, 
                     mutation_status] = [line[i] for i in required_indices]
                 if magi_indices:
-                    print magi_indices
                     [transcript_id, codon, aa_change] = [line[i] for i in magi_indices]
                 else:
                     gene_to_sample = None
@@ -92,10 +91,12 @@ def process_maf_file(maf_path, transcript_dict, sample_whitelist, gene_whitelist
                 # the MAGI output could not be found in the MAF file. This is either because
                 # the column names were not recognized, or the data was simply not present.
 
-                # ***************************************************************************
+                # *************************************************************************** #
 
                 if magi_indices == None:
                     continue
+
+
 
                 if '.' in transcript_id:
                     transcript_id = transcript_id.split('.')[0]
@@ -109,7 +110,10 @@ def process_maf_file(maf_path, transcript_dict, sample_whitelist, gene_whitelist
                         length = database[transcript_id]
                 if not length:
                     stats['missing_transcripts'].add(transcript_id)
-                    continue
+                    length = 'transcript_not_found'
+
+                if not transcript_id:
+                    transcript_id = 'no_transcript_id'
 
                 try:
                     original_amino_acid, new_amino_acid, amino_acid_location = get_amino_acid_change(
@@ -202,6 +206,7 @@ def get_amino_acid_change(aa_change, variant_type, variant_class_type, codon):
         elif variant_type in ("DEL", "INS"):
             aa_original, aa_new, aa_location = ins_del_mutation(aa_change, codon)
         else:
+            print aa_change + ' ' + variant_type + ' ' + variant_class_type + ' ' + codon
             sys.stderr.write("New mutation type can't be parsed: %s\n" % variant_type)
             exit(1)
 
@@ -216,7 +221,6 @@ def write_magi(gene_to_sample, config):
             outfile.write("THERE WAS AN ERROR PROCESSING THIS MAF FILE.\n")
             outfile.write("Data required for MAGI processing was not found.")
             return
-        print gene_to_sample
         header = "#Gene\tSample\tTranscript\tTranscript_Length\tLocus\t"\
                      "Mutation_Type\tOriginal_Amino_Acid\tNew_Amino_Acid\n"
         outfile.write(header)
