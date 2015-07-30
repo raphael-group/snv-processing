@@ -3,7 +3,8 @@
 *.todo
 MAFfiles
 *.tsv
-
+mafToTSV.py
+*.png
 # Compiled source #
 ###################
 *.com

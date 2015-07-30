@@ -7,7 +7,8 @@ from collections import defaultdict
 
 def process_maf_file(maf_path, transcript_dict, sample_whitelist, gene_whitelist, config):
 
-    indice_list = None
+    required_indices = None
+    magi_indices = None
     stats = {'total_mutations':0, 'processed_mutations':0, 'missing_transcripts':set(), 
              'samples':defaultdict(lambda: 0), 'genes':defaultdict(lambda: 0), 'mutation_types':defaultdict(lambda: 0),
              'unknown_mutations':set()}
@@ -34,21 +35,29 @@ def process_maf_file(maf_path, transcript_dict, sample_whitelist, gene_whitelist
             line = line.rstrip().split('\t')
 
             # Indentify indices of relevant columns
-            if not indice_list:
+            if not required_indices:
                 try:
-                    indice_list = define_indices(line)
+                    required_indices, magi_indices = define_indices(line)
                 except IndexError:
-                    print "\nCould not parse indices of " + str(config.get('options','file'))+"\n"
+                    print "\nCould not parse all indices of " + str(config.get('options','file'))+"\n"
+                    print "Fatal error occured, required headers missing. Exiting."
                     exit(1)
                 continue
 
+            # populate data from line
             try:
-                [gene, sample, variant_class_type, variant_type, valid_status,
-                mutation_status, transcript_id, codon, aa_change] = [line[i] for i in indice_list]
+                [gene, sample, variant_class_type, variant_type, valid_status, 
+                    mutation_status] = [line[i] for i in required_indices]
+                if magi_indices:
+                    print magi_indices
+                    [transcript_id, codon, aa_change] = [line[i] for i in magi_indices]
+                else:
+                    gene_to_sample = None
             except IndexError:
-                print "Index out of range"
+                print "Index out of range in file " + str(config.get('options','file'))
                 print "Index list:"
-                print str(indice_list)
+                print str(required_indices)
+                print str(magi_indices)
                 print "Line: "
                 print line
                 exit(1)
@@ -59,19 +68,7 @@ def process_maf_file(maf_path, transcript_dict, sample_whitelist, gene_whitelist
             if sample_whitelist and sample not in sample_whitelist:
                 continue
 
-            if '.' in transcript_id:
-                transcript_id = transcript_id.split('.')[0]
 
-            # Search all transcript databases for transcript id and
-            # return corresponding length if found. If none is found,
-            # add to missing transcripts set and ignore this mutation
-            length = None
-            for _, database in transcript_dict.items():
-                if transcript_id in database:
-                    length = database[transcript_id]
-            if not length:
-                stats['missing_transcripts'].add(transcript_id)
-                continue
 
             # take only first three segments of name if sample is from TCGA
             if sample[:4] == 'TCGA':
@@ -80,9 +77,40 @@ def process_maf_file(maf_path, transcript_dict, sample_whitelist, gene_whitelist
             # Javascript can't have "." in gene names
             gene = gene.replace(".", "-")
 
-            if (length and mutation_status.lower() not in exclude_status 
+            if (mutation_status.lower() not in exclude_status 
                     and variant_class_type.lower() not in exclude_mutations
                     and valid_status.lower() not in exclude_validation):
+
+                sample_to_gene[sample].add(gene)
+
+                stats['samples'][sample] += 1
+                stats['genes'][gene] += 1
+                stats['processed_mutations'] += 1
+                stats['mutation_types'][variant_class_type] += 1
+
+                # If magi_indices is None, this means that the data required to produce
+                # the MAGI output could not be found in the MAF file. This is either because
+                # the column names were not recognized, or the data was simply not present.
+
+                # ***************************************************************************
+
+                if magi_indices == None:
+                    continue
+
+                if '.' in transcript_id:
+                    transcript_id = transcript_id.split('.')[0]
+
+                # Search all transcript databases for transcript id and
+                # return corresponding length if found. If none is found,
+                # add to missing transcripts set and ignore this mutation
+                length = None
+                for _, database in transcript_dict.items():
+                    if transcript_id in database:
+                        length = database[transcript_id]
+                if not length:
+                    stats['missing_transcripts'].add(transcript_id)
+                    continue
+
                 try:
                     original_amino_acid, new_amino_acid, amino_acid_location = get_amino_acid_change(
                                                 aa_change, variant_type, variant_class_type, codon)
@@ -91,12 +119,8 @@ def process_maf_file(maf_path, transcript_dict, sample_whitelist, gene_whitelist
                     continue
 
                 if original_amino_acid and new_amino_acid and amino_acid_location:
-                    stats['samples'][sample] += 1
-                    stats['genes'][gene] += 1
-                    stats['processed_mutations'] += 1
-                    stats['mutation_types'][variant_class_type] += 1
 
-                    sample_to_gene[sample].add(gene)
+
                     gene_to_sample[gene][sample].append({'transcript':transcript_id,
                          'length':length, 'locus':amino_acid_location, 'mutation_type': variant_class_type,
                          'o_amino_acid':original_amino_acid, 'n_amino_acid':new_amino_acid})
@@ -120,24 +144,41 @@ def define_indices(header_line):
     valid_status = ["validation_status"] # FOR WILDTYPE/INVALID CHECKING
     mut_stat = ["mutation_status"] # FOR GERMLINE CHECKING
     variant_type = ["variant_type"] # MUTATION TYPE
+
     codon = ["codon_change", "c_position", "c_position_wu", "chromchange", "amino_acids"] # CODON
     aachange = ["protein_change", "amino_acid_change", "aachange", "amino_acid_change_wu", "hgvsp_short"] # Protein change
     transcript_id = ["refseq_mrna_id", "transcript_name", "transcript_name_wu", "transcriptid", "transcript_id"]
 
-    header_name_list = [gene_name, sample, variant_class_type, variant_type, valid_status, 
-                        mut_stat, transcript_id, codon, aachange]
+    # header_name_list = [gene_name, sample, variant_class_type, variant_type, valid_status, 
+                        # mut_stat, transcript_id, codon, aachange]
+    required_headers = [gene_name, sample, variant_class_type, variant_type, valid_status, mut_stat]
+    magi_required_headers = [transcript_id, codon, aachange]
 
-    indice_list = []
-    for header_options in header_name_list:
+    required_indices = []
+    magi_indices = []
+
+    # Find indices needed to process HotNet2 and CoMEt outputs. Without these, it
+    # is not possible to process the MAF at all.
+    for header_options in required_headers:
         existing_headers = set(header_options) & set(indice_dict.keys())
         if len(existing_headers) == 0:
-            print "Names %s not found" % str(header_options)
+            print "Header %s not found, no output possible. Aborting." % str(header_options)
             raise IndexError()
         else:
-            indice_list.append(indice_dict[existing_headers.pop()])
+            required_indices.append(indice_dict[existing_headers.pop()])
+    
+    # Find indices needed to process MAGI output. 
+    for header_options in magi_required_headers:
+        if magi_indices == None:
+            continue
+        existing_headers = set(header_options) & set(indice_dict.keys())
+        if len(existing_headers) == 0:
+            print "Names %s not found, MAGI ouput not possible, attempting to output other formats if selected" % str(header_options)
+            magi_indices = None
+        else:
+            magi_indices.append(indice_dict[existing_headers.pop()])
             
-    assert len(indice_list) == 9
-    return indice_list
+    return required_indices, magi_indices
 
 def get_amino_acid_change(aa_change, variant_type, variant_class_type, codon):
     '''
@@ -171,6 +212,11 @@ def write_magi(gene_to_sample, config):
     out_name = config.get('options', 'prefix')+"_maf_magi.tsv"
 
     with open(os.path.join(out_dir, out_name), "w") as outfile:
+        if gene_to_sample == None:
+            outfile.write("THERE WAS AN ERROR PROCESSING THIS MAF FILE.\n")
+            outfile.write("Data required for MAGI processing was not found.")
+            return
+        print gene_to_sample
         header = "#Gene\tSample\tTranscript\tTranscript_Length\tLocus\t"\
                      "Mutation_Type\tOriginal_Amino_Acid\tNew_Amino_Acid\n"
         outfile.write(header)
@@ -182,9 +228,7 @@ def write_magi(gene_to_sample, config):
 
 def write_other(sample_to_gene, config, out_type):
     """
-    Writes two files, one with every gene found by gistic for each peak,
-    another with the target genes found at each peak. Row location maps
-    one to the other.
+    Outputs a mutation file compatible with both HotNet2 and CoMEt.
     """
     out_dir = config.get('options','output_dir')
     out_name = config.get('options', 'prefix')+"_maf_"+out_type+".tsv"
@@ -236,10 +280,11 @@ def visualize_data(stats, gene_to_sample, config):
         plot_value.append(quantity)
 
     y_pos = np.arange(len(plot_items))
-    plt.barh(y_pos, np.array(plot_value), align='center', alpha=0.4)
+    plt.barh(y_pos, np.array(plot_value), align='center', alpha=0.8)
     plt.yticks(y_pos, plot_items)
     plt.xlabel('Total mutations')
 
+    plt.tight_layout()
     plt.savefig('plottest.png')
     plt.close()
 
