@@ -214,7 +214,7 @@ def get_amino_acid_change(aa_change, variant_type, variant_class_type, codon):
 
 def write_magi(gene_to_sample, config):
     out_dir = config.get('options','output_dir')
-    out_name = config.get('options', 'prefix')+"_maf_magi.tsv"
+    out_name = config.get('options', 'prefix')+"_magi.tsv"
 
     with open(os.path.join(out_dir, out_name), "w") as outfile:
         if gene_to_sample == None:
@@ -235,7 +235,7 @@ def write_other(sample_to_gene, config, out_type):
     Outputs a mutation file compatible with both HotNet2 and CoMEt.
     """
     out_dir = config.get('options','output_dir')
-    out_name = config.get('options', 'prefix')+"_maf_"+out_type+".tsv"
+    out_name = config.get('options', 'prefix')+"_"+out_type+".tsv"
 
     with open(os.path.join(out_dir,out_name), "w") as outfile:
         for sample in sorted(sample_to_gene):
@@ -249,22 +249,22 @@ def output_stats(stats, config):
 
     output_list = []
     output_list.append("*** Summary statistics ***")
-    output_list.append("*  Total mutations in file: " + str(stats['total_mutations']))
-    output_list.append("*  Mutations successfully processed: " + str(stats['processed_mutations']))
-    output_list.append("*  Success ratio: " + str(float(stats['processed_mutations']) / stats['total_mutations']))
-    output_list.append("*  Unique samples: " + str(len(stats['samples'])))
-    output_list.append("*  Unique genes: " + str(len(stats['genes'])))
+    output_list.append("*  Total mutations in file:\t" + str(stats['total_mutations']))
+    output_list.append("*  Mutations successfully processed:\t" + str(stats['processed_mutations']))
+    output_list.append("*  Success ratio:\t" + str(float(stats['processed_mutations']) / stats['total_mutations']))
+    output_list.append("*  Unique samples:\t" + str(len(stats['samples'])))
+    output_list.append("*  Unique genes:\t" + str(len(stats['genes'])))
     output_list.append("*  Mutation types and totals:")
     for mut_type, quantity in stats['mutation_types'].items():
-        output_list.append(mut_type + ' ' + str(quantity))
+        output_list.append(mut_type + '\t' + str(quantity))
     if len(stats['missing_transcripts']) > 0 :
         output_list.append("*  Missing transcripts:")
         for transcript in stats['missing_transcripts']:
-            output_list.append("**  " + transcript)
+            output_list.append("**\t" + transcript)
     if len(stats['unknown_mutations']) > 0 :
         output_list.append("*  Unknown mutations:")
         for mutation in stats['unknown_mutations']:
-            output_list.append("**  " + mutation)
+            output_list.append("**\t" + mutation)
 
     out_dir = config.get('options','output_dir')
     out_name = config.get('options', 'prefix')+'_summary.txt'
@@ -289,7 +289,7 @@ def visualize_data(stats, gene_to_sample, config):
     plt.xlabel('Total mutations')
 
     plt.tight_layout()
-    plt.savefig('plottest.png')
+    plt.savefig(config.get('options','prefix')+'_mut_count.svg')
     plt.close()
 
     # maybe change this to x axis = # of mutations, y axis = # of the genes with that many mutations
