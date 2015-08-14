@@ -298,7 +298,7 @@ def visualize_data(stats, gene_to_sample, config):
     plt.close()
 
      #####################################################
-    #           Number of each kind of mutation           # 
+    #             Top 40 Amino Acid Mutations             # 
      #####################################################
 
     change_count = defaultdict(int)
@@ -310,7 +310,7 @@ def visualize_data(stats, gene_to_sample, config):
                 change_count[key] += 1
 
 
-    top_names = sorted(change_count, key=lambda k: change_count[k], reverse=True)[:30]
+    top_names = sorted(change_count, key=lambda k: change_count[k], reverse=True)[:40]
 
     top_values = []
     for mut in top_names:
@@ -322,7 +322,7 @@ def visualize_data(stats, gene_to_sample, config):
     plt.xticks(x_pos, top_names,rotation=45)
     plt.xlabel('Mutation')
     plt.ylabel('Count')
-    plt.title('Mutation count')
+    plt.title('Top 40 Amino Acid Changes')
 
     plt.bar(x_pos, np.array(top_values), align='center', alpha=0.8)
     plt.tight_layout()
