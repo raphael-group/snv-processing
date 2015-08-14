@@ -276,6 +276,11 @@ def output_stats(stats, config):
 
 def visualize_data(stats, gene_to_sample, config):
 
+    # ADD AMINO ACID CHANGE
+     #####################################################
+    #           Number of each kind of mutation           # 
+     #####################################################
+
     plot_items = []
     plot_value = []
 
@@ -290,6 +295,38 @@ def visualize_data(stats, gene_to_sample, config):
 
     plt.tight_layout()
     plt.savefig(config.get('options','prefix')+'_mut_count.svg')
+    plt.close()
+
+     #####################################################
+    #           Number of each kind of mutation           # 
+     #####################################################
+
+    change_count = defaultdict(int)
+
+    for gene in gene_to_sample:
+        for sample in gene_to_sample[gene]:
+            for mut in gene_to_sample[gene][sample]:
+                key = mut['o_amino_acid'] + ' to ' + mut['n_amino_acid']
+                change_count[key] += 1
+
+
+    top_names = sorted(change_count, key=lambda k: change_count[k], reverse=True)[:30]
+
+    top_values = []
+    for mut in top_names:
+        top_names.append(change_count[mut])
+
+    plt.figure(figsize=(12,6))
+
+    x_pos = np.arange(len(top_names))
+    plt.xticks(x_pos, top_names,rotation=45)
+    plt.xlabel('Mutation')
+    plt.ylabel('Count')
+    plt.title('Mutation count')
+
+    plt.bar(x_pos, np.array(top_values), align='center', alpha=0.8)
+    plt.tight_layout()
+    plt.savefig(config.get('options','prefix')+'_type_count.svg')
     plt.close()
 
     # maybe change this to x axis = # of mutations, y axis = # of the genes with that many mutations
@@ -391,9 +428,6 @@ def run(config):
         visualize_data(stats, gene_to_sample, config)
 
 
-
-## BELOW IS OLD CODE, included just to get this working. Need to survey
-## MAF files to get an idea of how to improve amino acid change info extraction
 ################################################################################
 # Parse the different mutation formats to get the amino acid change
 
