@@ -314,7 +314,7 @@ def visualize_data(stats, gene_to_sample, config):
 
     top_values = []
     for mut in top_names:
-        top_names.append(change_count[mut])
+        top_values.append(change_count[mut])
 
     plt.figure(figsize=(12,6))
 
