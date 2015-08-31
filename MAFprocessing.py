@@ -1,11 +1,19 @@
 #!/usr/bin/python
 
 import re, sys, math, os, json, argparse, ConfigParser
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 from collections import defaultdict
 
-def process_maf_file(maf_path, transcript_dict, sample_whitelist, gene_whitelist, config):
+def process_maf_file(maf_path, transcript_dict, sample_whitelist_file, gene_whitelist_file, config):
+
+
+    if gene_whitelist_file:
+        gene_whitelist = parse_whitelist(gene_whitelist_file)
+    if sample_whitelist_file:
+        sample_whitelist = parse_whitelist(sample_whitelist_file)
 
     required_indices = None
     magi_indices = None
@@ -18,10 +26,9 @@ def process_maf_file(maf_path, transcript_dict, sample_whitelist, gene_whitelist
 
     # Used for CoMEt/HotNet2 output
     sample_to_gene = defaultdict(set)
-
-    exclude_mutations = set(config.get('options', 'mutation_types_blacklist').lower().split(','))
-    exclude_status = set(config.get('options', 'mutation_status_blacklist').lower().split(','))
-    exclude_validation = set(config.get('options', 'validation_status_blacklist').lower().split(','))
+    exclude_mutations = set(config.get('options', 'mutation_types_blacklist').lower().split(' '))
+    exclude_status = set(config.get('options', 'mutation_status_blacklist').lower().split(' '))
+    exclude_validation = set(config.get('options', 'validation_status_blacklist').lower().split(' '))
 
     with open(maf_path) as maf_file:
         for line in maf_file:
@@ -61,17 +68,15 @@ def process_maf_file(maf_path, transcript_dict, sample_whitelist, gene_whitelist
                 print line
                 exit(1)
 
-            # If a whitelist is provided, skip any genes/samples not in the list
-            if gene_whitelist and gene not in gene_whitelist:
-                continue
-            if sample_whitelist and sample not in sample_whitelist:
-                continue
-
-
-
             # take only first three segments of name if sample is from TCGA
             if sample[:4] == 'TCGA':
                 sample = '-'.join((sample.split('-'))[:3])
+
+            # If a whitelist is provided, skip any genes/samples not in the list
+            if gene_whitelist_file and gene not in gene_whitelist:
+                continue
+            if sample_whitelist_file and sample not in sample_whitelist:
+                continue
 
             # Javascript can't have "." in gene names
             gene = gene.replace(".", "-")
@@ -132,6 +137,15 @@ def process_maf_file(maf_path, transcript_dict, sample_whitelist, gene_whitelist
 
 
     return gene_to_sample, sample_to_gene, stats
+
+def parse_whitelist(whitelist_file):
+
+    white_set = set()
+    with open(whitelist_file, "r") as white_file:
+        for line in white_file:
+            white_set.add(line.rstrip())
+    return white_set
+
 
 def define_indices(header_line):
     '''
@@ -329,32 +343,6 @@ def visualize_data(stats, gene_to_sample, config):
     plt.savefig(config.get('options','prefix')+'_type_count.svg')
     plt.close()
 
-    # maybe change this to x axis = # of mutations, y axis = # of the genes with that many mutations
-    # fig_size = plt.rcParams["figure.figsize"]
-     
-    # # Prints: [8.0, 6.0]
-    # print "Current size:", fig_size
-    # fig_size[1] = 30
-     
-    # # Set figure width to 12 and height to 9
-    # # fig_size[0] = 12
-    # # fig_size[1] = 9
-
-    # plot_items = []
-    # plot_value = []
-
-    # for gene, quantity in stats['genes'].items():
-    #     plot_items.append(gene)
-    #     plot_value.append(quantity)
-
-    # y_pos = np.arange(len(plot_items))
-    # plt.barh(y_pos, np.array(plot_value), align='center', alpha=0.4,)
-    # plt.yticks(y_pos, plot_items)
-    # plt.xlabel('Total mutations')
-
-    # plt.show()
-
-
 def get_parser():
     '''
     Parse arguments.
@@ -363,6 +351,7 @@ def get_parser():
     parser = argparse.ArgumentParser(description='Parse MAF files')
 
     parser.add_argument('-f', '--file', help='Path to MAF file to be processed')
+    parser.add_argument('-d', '--database', help='Path to transcripts database file')
     parser.add_argument('-s', '--statistics', action='store_true')
     parser.add_argument('-v', '--visualization', action='store_true')
     parser.add_argument('-o', '--output_dir',help="Folder to output processed MAF data")
