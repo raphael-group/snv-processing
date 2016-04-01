@@ -124,7 +124,7 @@ def process_maf_file(maf_path, transcript_dict, sample_whitelist_file, gene_whit
                     original_amino_acid, new_amino_acid, amino_acid_location = get_amino_acid_change(
                                                 aa_change, variant_type, variant_class_type, codon)
                 except ValueError:
-                    stats['unknown_mutations'].add(aa_change + variant_type + variant_class_type)
+                    stats['unknown_mutations'].add(' '.join([aa_change, variant_type, variant_class_type]))
                     continue
 
                 if original_amino_acid and new_amino_acid and amino_acid_location:
@@ -215,14 +215,14 @@ def get_amino_acid_change(aa_change, variant_type, variant_class_type, codon):
                 return None, None, None
             else:
                 sys.stderr.write("New mutation effect can't be parsed: %s\n" % variant_class_type)
-                exit(1)
+                raise ValueError
 
         elif variant_type in ("DEL", "INS"):
             aa_original, aa_new, aa_location = ins_del_mutation(aa_change, codon)
         else:
             print aa_change + ' ' + variant_type + ' ' + variant_class_type + ' ' + codon
             sys.stderr.write("New mutation type can't be parsed: %s\n" % variant_type)
-            exit(1)
+            raise ValueError
 
     return aa_original, aa_new, aa_location
 
