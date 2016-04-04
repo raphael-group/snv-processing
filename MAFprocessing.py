@@ -267,7 +267,7 @@ def write_samples(sample_set, config):
     filtering or white/black lists.
     """
     out_dir = config.get('options','output_dir')
-    out_name = config.get('options', 'prefix')+"_maf_sample_list"+".tsv"
+    out_name = config.get('options', 'prefix')+"_maf_sample_list.tsv"
 
     with open(os.path.join(out_dir,out_name), "w") as outfile:
         for sample in sample_set:
@@ -420,7 +420,6 @@ def run(config):
     gene_to_sample, sample_to_gene, stats, sample_set = process_maf_file(maf_file, transcript_dict, sample_whitelist, gene_whitelist, config)
 
 
-    write_samples(sample_set, config)
 
     if not os.path.exists(config.get('options', 'output_dir')):
         os.makedirs(config.get('options', 'output_dir'))
@@ -431,6 +430,7 @@ def run(config):
     if 'hotnet2' in config.get('options', 'type'):
         write_other(sample_to_gene, config, 'hotnet2')
 
+    write_samples(sample_set, config)
 
 
     if config.getboolean('options','statistics'):
