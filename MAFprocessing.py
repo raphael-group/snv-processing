@@ -21,6 +21,9 @@ def process_maf_file(maf_path, transcript_dict, sample_whitelist_file, gene_whit
              'samples':defaultdict(lambda: 0), 'genes':defaultdict(lambda: 0), 'mutation_types':defaultdict(lambda: 0),
              'unknown_mutations':set()}
 
+    # Track samples for list of gene output
+    sample_set = set()
+
     # Used for MAGI output
     gene_to_sample = defaultdict(lambda: defaultdict(list))
 
@@ -71,6 +74,8 @@ def process_maf_file(maf_path, transcript_dict, sample_whitelist_file, gene_whit
             # take only first three segments of name if sample is from TCGA
             if sample[:4] == 'TCGA':
                 sample = '-'.join((sample.split('-'))[:3])
+
+            sample_set.add(sample)
 
             # If a whitelist is provided, skip any genes/samples not in the list
             if gene_whitelist_file and gene not in gene_whitelist:
@@ -136,7 +141,7 @@ def process_maf_file(maf_path, transcript_dict, sample_whitelist_file, gene_whit
 
 
 
-    return gene_to_sample, sample_to_gene, stats
+    return gene_to_sample, sample_to_gene, stats, sample_set
 
 def parse_whitelist(whitelist_file):
 
@@ -255,6 +260,19 @@ def write_other(sample_to_gene, config, out_type):
         for sample in sorted(sample_to_gene):
             if len(sample_to_gene[sample]) > 0:
                 outfile.write(sample + '\t' + '\t'.join(sorted(list(sample_to_gene[sample])))+'\n')
+
+def write_samples(sample_set, config):
+    """
+    Outputs a file containing ALL samples found in the input MAF, regardless of
+    filtering or white/black lists.
+    """
+    out_dir = config.get('options','output_dir')
+    out_name = config.get('options', 'prefix')+"_maf_sample_list"+".tsv"
+
+    with open(os.path.join(out_dir,out_name), "w") as outfile:
+        for sample in sample_set:
+            outfile.write(sample+'\n')
+
 
 def output_stats(stats, config):
 # stats = {'total_mutations':0, 'processed_mutations:':0, 'missing_transcripts':set(), 
@@ -399,7 +417,10 @@ def run(config):
     with open(config.get('options', 'database')) as t_file:
         transcript_dict = json.load(t_file)
 
-    gene_to_sample, sample_to_gene, stats = process_maf_file(maf_file, transcript_dict, sample_whitelist, gene_whitelist, config)
+    gene_to_sample, sample_to_gene, stats, sample_set = process_maf_file(maf_file, transcript_dict, sample_whitelist, gene_whitelist, config)
+
+
+    write_samples(sample_set, config)
 
     if not os.path.exists(config.get('options', 'output_dir')):
         os.makedirs(config.get('options', 'output_dir'))
@@ -409,6 +430,8 @@ def run(config):
         write_other(sample_to_gene, config, 'comet')
     if 'hotnet2' in config.get('options', 'type'):
         write_other(sample_to_gene, config, 'hotnet2')
+
+
 
     if config.getboolean('options','statistics'):
         output_stats(stats, config)

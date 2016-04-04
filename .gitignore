@@ -1,7 +1,8 @@
 # Project specific
 ##################
 *.todo
-MAFfiles
+maffiles
+*inprogress
 *.tsv
 mafToTSV.py
 *.png
