@@ -267,7 +267,7 @@ def write_samples(sample_set, config):
     filtering or white/black lists.
     """
     out_dir = config.get('options','output_dir')
-    out_name = config.get('options', 'prefix')+"_maf_sample_list.tsv"
+    out_name = config.get('options', 'prefix')+"_sample_list.tsv"
 
     with open(os.path.join(out_dir,out_name), "w") as outfile:
         for sample in sample_set:
