@@ -376,6 +376,11 @@ def get_parser():
     parser.add_argument('-t', '--type', help="Output format options: magi,hotnet2,comet", type=str.lower,
                          choices=['magi', 'hotnet2', 'comet'],nargs='+')
     parser.add_argument('-p', '--prefix', help='String to prefix output files.')
+    parser.add_argument('-sw', '--sample', help='Location of sample whitelist file (if this is not included all samples will be considered).')
+    parser.add_argument('-gw', '--gene', help='Location of gene whitelist file (if this is not included all genes will be considered).')
+    parser.add_argument('-mtb', '--mutation_types_blacklist',  nargs='*', help='List of mutation types to EXCLUDE.')    
+    parser.add_argument('-msb', '--mutation_status_blacklist', nargs='*', help='List of mutation statuses to EXCLUDE.')
+    parser.add_argument('-vsb', '--validation_status_blacklist', nargs='*', help='List of validation statuses to EXCLUDE.')
 
 
     return parser

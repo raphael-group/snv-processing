@@ -6,6 +6,7 @@ maffiles
 *.tsv
 mafToTSV.py
 *.png
+temp_dev
 # Compiled source #
 ###################
 *.com
