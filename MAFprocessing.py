@@ -30,8 +30,14 @@ def process_maf_file(maf_path, transcript_dict, sample_whitelist_file, gene_whit
     # Used for CoMEt/HotNet2 output
     sample_to_gene = defaultdict(set)
     exclude_mutations = set(config.get('options', 'mutation_types_blacklist').lower().split(' '))
+    if config.get('options', 'mutation_types_whitelist'):
+        whitelist_mutations = set(config.get('options', 'mutation_types_whitelist').lower().split(' '))
+        print "white list found"
+    else:
+        whitelist_mutations = None
     exclude_status = set(config.get('options', 'mutation_status_blacklist').lower().split(' '))
     exclude_validation = set(config.get('options', 'validation_status_blacklist').lower().split(' '))
+
 
     with open(maf_path) as maf_file:
         for line in maf_file:
@@ -89,6 +95,13 @@ def process_maf_file(maf_path, transcript_dict, sample_whitelist_file, gene_whit
             if (mutation_status.lower() not in exclude_status 
                     and variant_class_type.lower() not in exclude_mutations
                     and valid_status.lower() not in exclude_validation):
+
+
+                # Whitelist of mutations override
+                if whitelist_mutations and variant_class_type.lower() not in whitelist_mutations:   
+                    continue
+
+
 
                 sample_to_gene[sample].add(gene)
 
@@ -378,9 +391,10 @@ def get_parser():
     parser.add_argument('-p', '--prefix', help='String to prefix output files.')
     parser.add_argument('-sw', '--sample', help='Location of sample whitelist file (if this is not included all samples will be considered).')
     parser.add_argument('-gw', '--gene', help='Location of gene whitelist file (if this is not included all genes will be considered).')
-    parser.add_argument('-mtb', '--mutation_types_blacklist',  nargs='*', help='List of mutation types to EXCLUDE.')    
-    parser.add_argument('-msb', '--mutation_status_blacklist', nargs='*', help='List of mutation statuses to EXCLUDE.')
-    parser.add_argument('-vsb', '--validation_status_blacklist', nargs='*', help='List of validation statuses to EXCLUDE.')
+    parser.add_argument('-mtb', '--mutation_types_blacklist',  help='List of mutation types to EXCLUDE. Space separated string.')    
+    parser.add_argument('-mtw', '--mutation_types_whitelist',  help='List of mutation types to INCLUDE. Space separated string. If set, overrides blacklist.')    
+    parser.add_argument('-msb', '--mutation_status_blacklist', help='List of mutation statuses to EXCLUDE. Space separated string.')
+    parser.add_argument('-vsb', '--validation_status_blacklist', help='List of validation statuses to EXCLUDE. Space separated string.')
 
 
     return parser
@@ -391,6 +405,7 @@ def get_config(args):
     found = config.read('maf.cfg')
     if not found:
         raise IOError("Error: Config file not found!")
+
 
     # Integrate command line arguments into configuration
     for arg in vars(args):
