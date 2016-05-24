@@ -26,7 +26,7 @@ A tab separated file, each row is a sample and associated gene mutations. The fi
 The same as HotNet2, named {prefix}_comet.tsv.
 
 #### MAGI
-A eight column, tab separated file with a header. Each row (in order) consists of a gene, a sample, the transcript ID, the transcript length, the locus of the mutation, the mutation type, the original amino acide, and the new amino acid.
+A eight column, tab separated file with a header. Each row (in order) consists of a gene, a sample, the transcript ID, the transcript length, the locus of the mutation, the mutation type, the original amino acid, and the new amino acid.
 
 
 Usage
