@@ -1,8 +1,8 @@
-# MAF Processing
+# SNV Processing
 
 Purpose 
 ---
-
+Proces SNV data (.maf files) for use in CoMEt, MAGI, and HotNet2.
 
 Requires
 ---
