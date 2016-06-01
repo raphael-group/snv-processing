@@ -402,7 +402,10 @@ def get_parser():
 def get_config(args):
 
     config = ConfigParser.SafeConfigParser()
-    found = config.read('maf.cfg')
+    
+    cfg_loc = os.path.dirname(os.path.realpath(sys.argv[0]))
+    found = config.read(os.path.join(cfg_loc, 'maf.cfg'))
+
     if not found:
         raise IOError("Error: Config file not found!")
 
