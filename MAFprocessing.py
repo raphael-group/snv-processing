@@ -38,7 +38,6 @@ def process_maf_file(maf_path, transcript_dict, sample_whitelist_file, gene_whit
     exclude_status = set(config.get('options', 'mutation_status_blacklist').lower().split(' '))
     exclude_validation = set(config.get('options', 'validation_status_blacklist').lower().split(' '))
 
-
     with open(maf_path) as maf_file:
         for line in maf_file:
 
